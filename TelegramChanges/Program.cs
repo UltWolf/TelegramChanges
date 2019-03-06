@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.VisualBasic;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,8 +8,7 @@ using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.InlineQueryResults;
-using Telegram.Bot.Types.ReplyMarkups;
+ 
 
 namespace TelegramChanges
 {
@@ -22,27 +22,41 @@ namespace TelegramChanges
             Console.Title = me.Username; 
             Bot.OnMessageEdited += BotOnMessageEdit;
             Bot.OnCallbackQuery += BotOnCallbackQueryReceived;  
-            Bot.OnReceiveError += BotOnReceiveError;
-            Bot.OnUpdate += BotOnUpdateReceived;
+            Bot.OnReceiveError += BotOnReceiveError; 
             Bot.OnMessage += BotOnMessageReseived;
             Bot.StartReceiving(Array.Empty<UpdateType>()); 
             Console.WriteLine($"Start listening for @{me.Username}");
             Console.ReadLine();
             Bot.StopReceiving();
         }
-        private static async void BotOnUpdateReceived(object sender, UpdateEventArgs e)
-        {
-            var message = e.Update.Message;
-            if (message == null || message.Type != MessageType.Text) return;
-            var text = message.Text; 
-            await Bot.SendTextMessageAsync(message.Chat.Id, "_Recieved Update._", ParseMode.Markdown);
-        }
+         
         private static async void BotOnMessageReseived(object sender, MessageEventArgs messageEventArgs)
         {
             var message = messageEventArgs.Message;
-            
-            if (message == null || message.Type != MessageType.Text) return;
+             
             _messages.Add(message);
+            if (_messages.Count > 2)
+            {
+                if ((message.Text == _messages[_messages.Count - 1].Text) && (message.Text == _messages[_messages.Count - 2].Text))
+                {
+                    if ((message.From.Id == _messages[_messages.Count - 1].From.Id) && (message.From.Id == _messages[_messages.Count - 2].From.Id))
+                    {
+                        try
+                        {
+                            int banSeconds = 10;
+                            await Bot.KickChatMemberAsync(message.Chat.Id, message.From.Id, untilDate: DateTime.UtcNow.AddSeconds(banSeconds));
+                           
+
+                        }
+                        catch(Exception ex)
+                        {
+                            await Bot.SendTextMessageAsync(message.Chat.Id,"I can kick admins from channel, or kick users from private channel.");
+                        }
+                        return;
+                    }
+                }
+            }
+           
             switch (message.Text.Split(' ').First())
             {
                 case "/Работать":
