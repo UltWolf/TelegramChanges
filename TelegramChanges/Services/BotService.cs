@@ -44,6 +44,9 @@ namespace TelegramChanges.Services
                     case BotCommands.REMOVE:
                         Remove(message);
                         break;
+                    case BotCommands.EDIT:
+                        Edit(message);
+                        break;
                 }
             }
         }
@@ -113,9 +116,71 @@ namespace TelegramChanges.Services
 
         }
 
-        public void Edit(Message message)
+        public async void Edit(Message message)
         {
-            throw new System.NotImplementedException();
+              try {
+                            var stringsArray = message.Text.Split(" ");
+                            if (stringsArray.Length > 1)
+                            {
+                                StringBuilder stringBuilder = new StringBuilder("");
+                                for (var i = 1; i < stringsArray.Length; i++)
+                                {
+                                    stringBuilder.Append(stringsArray[i] + " ");
+                                }
+
+                                string regexTimePattern = @"\[(.*?)\]";
+                                string regexIdPattern = @"\{(.*?)\}";
+                                var taskId = Regex.Match(stringBuilder.ToString(),
+                                    regexIdPattern).ToString().Trim('}').Trim('{');
+                                var task = TaskService.States.SingleOrDefault(m => m.TaskId == int.Parse(taskId));
+                                if (task.UserId == message.From.Id)
+                                {
+                                    var timeString = Regex.Match(stringBuilder.ToString(),
+                                            regexTimePattern)
+                                        .ToString()
+                                        .Replace("[",
+                                            "")
+                                        .Replace("]",
+                                            "");
+                                    var messageText = Regex.Replace(stringBuilder.ToString(), regexTimePattern, "");
+                                    messageText = Regex.Replace(stringBuilder.ToString(), regexIdPattern, "");
+
+                                    lock (TaskService.States)
+                                    {
+
+                                        DateTime time = DateTime.ParseExact(timeString,
+                                            "MM-dd HH:mm",
+                                            System.Globalization.CultureInfo.InvariantCulture);
+                                        if (TaskService.States.Count > 0)
+                                        {
+                                            TaskService.States.Remove(task);
+                                            task = new TaskState(task.TaskId, time, messageText,
+                                                message.Chat.Id, message.From.Id);
+                                            
+                                            TaskService.AddTask(task);
+                                        }
+
+                                    }
+
+                                    messageText += "\nIn time: " + timeString;
+                                    messageText += "\nTask Id is: " + task.TaskId;
+                                    await Bot.SendTextMessageAsync(message.Chat, messageText);
+                                    TaskService.SerializeTasks();
+                                }
+
+                                else
+                                {
+                                    await Bot.SendTextMessageAsync(message.Chat,
+                                        "Sorry, but you haven`t enough permissions");
+                                }
+                            }
+
+
+              }
+                        catch (Exception ex)
+                        {
+
+                        }
         }
 
         public async void Remove(Message message)

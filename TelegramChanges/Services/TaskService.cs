@@ -49,10 +49,10 @@ namespace TelegramChanges.Services
 
             return null;
         }
-        public static List<TaskState> Initialize()
+        public static void Initialize()
         {
             CreateTaskData();
-            return DeserializeTask();
+            States = DeserializeTask();
         }
         private static void CreateTaskData()
         {

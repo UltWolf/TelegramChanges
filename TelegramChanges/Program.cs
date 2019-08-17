@@ -45,8 +45,9 @@ namespace TelegramChanges
             Bot.StopReceiving();
         }
 
-        private static void Clocks()
-        { 
+        private async static void Clocks()
+        {
+            TaskService.Initialize();
             while (true)
             { 
                     var now = DateTime.Now;
@@ -55,11 +56,12 @@ namespace TelegramChanges
                        
                         if(state.Time.ToString("f").Equals(now.ToString("f")))
                         {
-                             Bot.SendTextMessageAsync(state.ChatId, 
+                            var response =  await Bot.SendTextMessageAsync(state.ChatId, 
                                  "We are want remind you about:\n "+state.Message+
                                   "\nYou want take that message at:\n "+state.Time.ToString("F")
                                  +"\nHave a nice day.");
-                             
+
+                            await Bot.PinChatMessageAsync(response.Chat.Id, response.MessageId);
                              
                              TaskService.States.Remove(state);
                              TaskService.SerializeTasks();
