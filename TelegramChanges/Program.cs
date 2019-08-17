@@ -17,6 +17,7 @@ using Telegram.Bot.Args;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using TelegramChanges.Data;
+using TelegramChanges.Services;
 using File = System.IO.File;
 
 
@@ -26,18 +27,13 @@ namespace TelegramChanges
     {
         private static readonly TelegramBotClient Bot =
             new TelegramBotClient("742443229:AAEHNs7QYoLI9Aw463v72HbxrVmiKOgBwE8");
-
-        private static List<Telegram.Bot.Types.Message> _messages = new List<Telegram.Bot.Types.Message>();
-        private static List<ChatMember> _blackListMember = new List<ChatMember>();
-        private static List<TaskState> States=new List<TaskState>();
-        private static BinaryFormatter bf = new BinaryFormatter();
-        private static int IdCount = 0;
+        private static BotService _botService = new BotService(Bot); 
+   
 
         static void Main(string[] args)
         {
             var me = Bot.GetMeAsync().Result;
             Console.Title = me.Username;
-            Bot.OnUpdate += BotOnUpdate;
             Bot.OnMessageEdited += BotOnMessageEdit;
             Bot.OnCallbackQuery += BotOnCallbackQueryReceived;
             Bot.OnReceiveError += BotOnReceiveError;
@@ -50,14 +46,11 @@ namespace TelegramChanges
         }
 
         private static void Clocks()
-        {
-            Initialize();
+        { 
             while (true)
-            {
-                lock (States)
-                {
+            { 
                     var now = DateTime.Now;
-                    foreach (var state in States.ToList())
+                    foreach (var state in TaskService.States.ToList())
                     {
                        
                         if(state.Time.ToString("f").Equals(now.ToString("f")))
@@ -68,61 +61,22 @@ namespace TelegramChanges
                                  +"\nHave a nice day.");
                              
                              
-                             States.Remove(state);
-                             SerializeTasks();
+                             TaskService.States.Remove(state);
+                             TaskService.SerializeTasks();
                              break;
                         }
                         var result = DateTime.Compare(now,state.Time);
                         if (result == 1)
                         {
-                            States.Remove(state);
+                            TaskService.States.Remove(state);
                         }
                     }
-                }
-               
-                Thread.Sleep(TimeSpan.FromSeconds(30));
-                SerializeTasks();
-            }
-        }
-
-        private static void CreateTaskData()
-        {
-            if (!File.Exists("Tasks.data"))
-            {
-                File.Create("Tasks.data");
-            }
-        }
-
-        private static void Initialize()
-        {
-            CreateTaskData();
-            DeserializeTask();
-        }
-        private static void DeserializeTask()
-        {
-            lock (States)
-            {
-                try
-                {
-                    using (FileStream fs = new FileStream("Tasks.data", FileMode.Open, FileAccess.Read))
-                    {
-                        States = (List<TaskState>) bf.Deserialize(fs);
-                        IdCount = States.Count;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
                 
+                Thread.Sleep(TimeSpan.FromSeconds(30));
+                TaskService.SerializeTasks();
             }
         }
-
-        private static async void BotOnUpdate(object sender, UpdateEventArgs updateEventArgs)
-        {
-            Console.WriteLine(updateEventArgs.Update);
-            
-        }
+      
 
         private static async void BotOnMessageReseived(object sender, MessageEventArgs messageEventArgs)
         {
@@ -130,145 +84,9 @@ namespace TelegramChanges
 
             if (message != null && message.Text!=null)
             {
-                switch (message.Text.Split(' ').First().Replace("@ChangeUltWolfBot", ""))
-                {
-                    case "/work":
-                        Message essage = await Bot.SendPhotoAsync(
-                            chatId: message.Chat.Id,
-                            photo: "https://i.ytimg.com/vi/ZIozHiT1ehs/hqdefault.jpg",
-                            caption: "Опять работа",
-                            parseMode: ParseMode.Html
-                        );
-                        break;
-                    case "/unban":
-                        try
-                        {
-                            int userId = _blackListMember.Find(m => m.User.Username == message.Text.Split(' ')[1]).User
-                                .Id;
-                            await Bot.UnbanChatMemberAsync(message.Chat, userId);
-                        }
-                        catch (Exception ex)
-                        {
-                            await Bot.SendTextMessageAsync(message.Chat,
-                                "К сожалению мы не можем найти, или убрать со списка данного гражданина.");
-                        }
-
-                        break;
-                    case "/add": 
-                        try
-                        {
-                            var stringsArray = message.Text.Split(" ");
-                            if (stringsArray.Length > 1)
-                            {
-                                StringBuilder stringBuilder = new StringBuilder("");
-                                for (var i = 1; i < stringsArray.Length; i++)
-                                {
-                                    stringBuilder.Append(stringsArray[i] + " ");
-                                }
-                                string regexPattern = @"\[(.*?)\]";
-
-                                var timeString = Regex.Match(stringBuilder.ToString(),
-                                        regexPattern)
-                                    .ToString()
-                                    .Replace("[",
-                                        "")
-                                    .Replace("]",
-                                        "");
-                                var messageText = Regex.Replace(stringBuilder.ToString(), regexPattern,"");
-                               
-                                var task = new TaskState();
-                                lock (States)
-                                {
-
-                                    DateTime time = DateTime.ParseExact(timeString,
-                                        "MM-dd HH:mm", 
-                                        System.Globalization.CultureInfo.InvariantCulture);
-                                    if (States.Count > 0)
-                                    {  var bytes = new byte[1];
-                                        var rng = RandomNumberGenerator.Create();
-                                        rng.GetBytes(bytes);
-                                        uint random = BitConverter.ToUInt32(bytes, 0) % 1000;
-                                        task = new TaskState((int)random, time, messageText,
-                                            message.Chat.Id, message.From.Id);
-                                        AddTask(task);
-                                    }
-                                    else
-                                    {
-                                        task = new TaskState(0, time, messageText,
-                                            message.Chat.Id, message.From.Id);
-                                        AddTask(task);
-                                    }
-                                }
-                                messageText+= "\nIn time: " + timeString;
-                                messageText += "\nTask Id is: " + task.TaskId;
-                                await Bot.SendTextMessageAsync(message.Chat, messageText);
-                                SerializeTasks();
-                            } 
-                            
-
-                        }
-                        catch (Exception ex)
-                        {
-
-                        }
-
-                        break;
-                    case "/list":
-                        var resultText = new StringBuilder("You have next tasks:\n");
-                        foreach (var state in States)
-                        {
-                            if (state.ChatId == message.Chat.Id)
-                            {
-                                resultText.Append($"{state.Time.ToString("f")} : {state.Message}\nIt`s have Id:{state.TaskId}\n\n");
-                              
-                            }
-                        }
-                        await Bot.SendTextMessageAsync(message.Chat, resultText.ToString());
-                        break;
-                    case "/remove":
-                        var stringArray = message.Text.Split(" ");
-                        var id = int.Parse(stringArray[1]);
-
-
-                        var taskState = States.First(m => m.TaskId == id);
-                        if(taskState!=null){
-                                if (taskState.UserId == message.From.Id)
-                                {
-                                    States.Remove(taskState);
-                                    SerializeTasks();
-                                    await Bot.SendTextMessageAsync(taskState.ChatId, "Task have been successfull removed");
-                                }
-                                else
-                                {
-                                    await Bot.SendTextMessageAsync(taskState.ChatId, "No, u can`t, it`s not your task, sorry");
-                                }
-                                break;
-                            } 
-                        break;
-                }
+                _botService.ExecuteCommand(message);
             }
         }
-
-        private static void AddTask(TaskState taskState)
-        {
-            States.Add(taskState);
-            SerializeTasks();
-        }
-
-        private static void SerializeTasks()
-        {
-            lock (States)
-            {
-                using (FileStream fs = new FileStream("Tasks.data",FileMode.Create,FileAccess.Write))
-                {
-                    bf.Serialize(fs,States);
-                }
-            }
-            
-        }
-    
-        
-                
 
         private static async void BotOnMessageEdit(object sender, MessageEventArgs messageEventArgs)
         {
@@ -282,8 +100,6 @@ namespace TelegramChanges
                 caption: "Пане президенте, хтось знову змінив повідомлення!",
                 parseMode: ParseMode.Html
             );
-
-           
         }
 
 
